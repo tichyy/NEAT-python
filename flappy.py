@@ -1,6 +1,4 @@
-import os
-
-import pygame, sys, time, neat
+import pygame, sys, time
 from sprites import Background, Bird, Obstacle
 from random import randint
 from settings import *
@@ -19,11 +17,6 @@ class Game:
         self.score = 0
         self.start_offset = 0
         self.gap_size = OBSTACLE_GAP_SIZE
-
-        # NEAT
-        self.birds = []
-        self.nets = []
-        self.ge = []
 
         # sprite groups
         self.all_sprites = pygame.sprite.Group()
@@ -54,7 +47,7 @@ class Game:
 
     def display_score(self):
         if self.active:
-            if
+            self.score = (pygame.time.get_ticks() - self.start_offset) // 1000
             y =  SCREEN_HEIGHT / 15
         else:
             y = SCREEN_HEIGHT / 2 + (self.menu_rect.height / 2)
@@ -63,30 +56,19 @@ class Game:
         score_rect = score_surf.get_rect(midtop = (SCREEN_WIDTH / 2, y))
         self.screen.blit(score_surf,score_rect)
 
-    def collision(self, bird, x):
-        if pygame.sprite.spritecollide(bird, self.collision_sprites, False, pygame.sprite.collide_mask) or bird.rect.centery <= 0 or bird.rect.bottom >= SCREEN_HEIGHT:
+    def collision(self):
+        if pygame.sprite.spritecollide(self.bird, self.collision_sprites, False, pygame.sprite.collide_mask) or self.bird.rect.centery <= 0 or self.bird.rect.bottom >= SCREEN_HEIGHT:
             self.active = False
             self.gap_size = 350
-            self.ge[x].fitness -= 1
-            self.birds.pop(x)
-            self.nets.pop(x)
-            self.ge.pop(x)
-            bird.kill()
+            self.bird.kill()
             for sprite in self.collision_sprites.sprites():
                 sprite.kill()
 
-    def run(self, genomes, config):
-
-        for g in genomes:
-            net = neat.nn.FeedForwardNetwork(g, config)
-            self.nets.append(net)
-            self.birds.append(Bird(self.all_sprites, self.scale_factor * 0.4))
-            g.fitness = 0
-            self.ge.append(g)
-
+    def run(self):
         last_time = time.time()
         while True:
-            # delta time
+
+            # delta time ?
             dt = time.time() - last_time
             last_time = time.time()
 
@@ -119,8 +101,7 @@ class Game:
             self.display_score()
 
             if self.active:
-                for x, bird in enumerate(self.birds):
-                    self.collision(bird, x)
+                self.collision()
             else:
                 self.screen.blit(self.menu_surf, self.menu_rect)
                 self.screen.blit(self.menu_text_surf, self.menu_text_rect)
@@ -128,21 +109,7 @@ class Game:
             pygame.display.update()
             self.clock.tick(FRAMERATE)
 
-def run_neat(config_path):
-    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
-
-    p = neat.Population(config)
-
-    p.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    p.add_reporter(stats)
-
-    winner = p.run(run,50)
-
 
 if __name__ == '__main__':
-    # game = Game()
-    # game.run()
-    local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, 'config_feedforward.txt')
-    run_neat(config_path)
+    game = Game()
+    game.run()
