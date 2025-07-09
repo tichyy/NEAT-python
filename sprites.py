@@ -61,18 +61,21 @@ class Bird(pygame.sprite.Sprite):
     def jump(self):
         self.direction = - 400
 
-
 class Obstacle(pygame.sprite.Sprite):
     def __init__(self, groups, scale_factor, orientation, x, yr, gap):
         super().__init__(groups)
         surf = pygame.image.load('assets/obstacle.png').convert_alpha()
         self.image  = pygame.transform.scale(surf, pygame.math.Vector2(surf.get_size()) * scale_factor)
+        self.passed = False
 
         if orientation == 'bottom':
             self.image = pygame.transform.flip(self.image, False, True)
             self.rect = self.image.get_rect(midbottom=(x, SCREEN_HEIGHT + yr))
+            self.info = self.rect.top
         else:
             self.rect = self.image.get_rect(midtop=(x,-(gap-yr)))
+            self.info = self.rect.bottom
+
         self.pos = pygame.math.Vector2(self.rect.topleft)
         # mask
         self.mask = pygame.mask.from_surface(self.image)

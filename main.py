@@ -5,8 +5,6 @@ from sprites import Background, Bird, Obstacle
 from random import randint
 from settings import *
 
-pygame.init()
-
 class Game:
     def __init__(self):
         # pygame init
@@ -19,6 +17,9 @@ class Game:
         self.score = 0
         self.start_offset = 0
         self.gap_size = OBSTACLE_GAP_SIZE
+
+        self.pipes = [] # temporary fix
+        self.dead_idx = []
 
         # NEAT
         self.birds = []
@@ -54,7 +55,17 @@ class Game:
 
     def display_score(self):
         if self.active:
-            if
+            for pipe in self.collision_sprites: # 1 score point for each pipe passed (top + bottom)
+                if pipe.info == pipe.rect.bottom:
+                    continue
+                for bird in self.birds:
+                    if pipe.pos.x < bird.pos.x and not pipe.passed:
+                        self.score += 1
+                        pipe.passed = True
+                        for g in self.ge:
+                            g.fitness += 5
+                        break
+
             y =  SCREEN_HEIGHT / 15
         else:
             y = SCREEN_HEIGHT / 2 + (self.menu_rect.height / 2)
@@ -63,22 +74,25 @@ class Game:
         score_rect = score_surf.get_rect(midtop = (SCREEN_WIDTH / 2, y))
         self.screen.blit(score_surf,score_rect)
 
-    def collision(self, bird, x):
-        if pygame.sprite.spritecollide(bird, self.collision_sprites, False, pygame.sprite.collide_mask) or bird.rect.centery <= 0 or bird.rect.bottom >= SCREEN_HEIGHT:
-            self.active = False
-            self.gap_size = 350
-            self.ge[x].fitness -= 1
-            self.birds.pop(x)
-            self.nets.pop(x)
-            self.ge.pop(x)
-            bird.kill()
-            for sprite in self.collision_sprites.sprites():
-                sprite.kill()
+    def collision(self, bird):
+        if pygame.sprite.spritecollide(bird, self.collision_sprites, False, pygame.sprite.collide_mask):
+            return True
+        if bird.rect.centery <= 0:
+            return True
+        if bird.rect.bottom >= SCREEN_HEIGHT:
+            return True
+        return False
 
-    def run(self, genomes, config):
+    def run(self, genomes, config): # our fitness function
+        self.active = True
 
-        for g in genomes:
-            net = neat.nn.FeedForwardNetwork(g, config)
+        self.birds = []
+        self.ge = []
+        self.nets = []
+        self.pipes = []
+
+        for _, g in genomes:
+            net = neat.nn.FeedForwardNetwork.create(g, config)
             self.nets.append(net)
             self.birds.append(Bird(self.all_sprites, self.scale_factor * 0.4))
             g.fitness = 0
@@ -90,37 +104,63 @@ class Game:
             dt = time.time() - last_time
             last_time = time.time()
 
+            next_pipe = None
+            next_pipe_bottom = None
+            if len(self.pipes) > 0:
+                for bird in self.birds:
+                    for pipe in self.pipes:
+                        if pipe.rect.right > bird.rect.left:
+                            if pipe.info == pipe.rect.bottom:
+                                next_pipe_bottom = pipe
+                            else:
+                                next_pipe = pipe
+                            break
+
             # event loop
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
 
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                    if self.active:
-                        self.bird.jump()
-                    else:
-                        self.bird = Bird(self.all_sprites, self.scale_factor * 0.4)
-                        self.active = True
-                        self.start_offset = pygame.time.get_ticks()
-
                 if event.type == self.obstacle_timer and self.active:
                     x = SCREEN_WIDTH + randint(40, 100)
                     yr = randint(50, 250)
-                    if self.score in (20, 50, 100):
+                    if self.score in (20, 50, 100): # maybe should be removed
                         self.gap_size -= 10
-                    Obstacle([self.all_sprites, self.collision_sprites], self.scale_factor * 5, 'top', x, yr, self.gap_size)
-                    Obstacle([self.all_sprites, self.collision_sprites], self.scale_factor * 5, 'bottom', x, yr, self.gap_size)
+                    self.pipes.append(Obstacle([self.all_sprites, self.collision_sprites], self.scale_factor * 5, 'top', x, yr, self.gap_size))
+                    self.pipes.append(Obstacle([self.all_sprites, self.collision_sprites], self.scale_factor * 5, 'bottom', x, yr, self.gap_size))
 
             # game logic
             self.screen.fill((0, 0, 0))
             self.all_sprites.update(dt)
+            self.pipes = [e for e in self.collision_sprites] # improve soon
             self.all_sprites.draw(self.screen)
             self.display_score()
 
             if self.active:
                 for x, bird in enumerate(self.birds):
-                    self.collision(bird, x)
+                    if self.collision(bird):
+                        self.ge[x].fitness -= 1
+                        self.birds[x].kill()
+                        self.birds.pop(x)
+                        self.nets.pop(x)
+                        self.ge.pop(x)
+                    else:
+                        self.ge[x].fitness += 0.1
+                        if next_pipe and next_pipe_bottom:
+                            pipe1_y = next_pipe.info
+                            pipe2_y = next_pipe_bottom.info
+                        else:
+                            pipe1_y = SCREEN_HEIGHT / 2
+                            pipe2_y = SCREEN_HEIGHT / 2
+                        output = self.nets[x].activate([
+                            bird.pos.y,
+                            abs(bird.pos.y - pipe1_y),
+                            abs(bird.pos.y - pipe2_y)
+                        ])
+                        if output[0] > 0.5:
+                            bird.jump()
+
             else:
                 self.screen.blit(self.menu_surf, self.menu_rect)
                 self.screen.blit(self.menu_text_surf, self.menu_text_rect)
@@ -137,7 +177,8 @@ def run_neat(config_path):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    winner = p.run(run,50)
+    game = Game()
+    winner = p.run(game.run,150)
 
 
 if __name__ == '__main__':
