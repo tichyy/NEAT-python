@@ -85,11 +85,14 @@ class Game:
 
     def run(self, genomes, config): # our fitness function
         self.active = True
-
+        self.score = 0
+        for e in self.collision_sprites:
+            e.kill()
         self.birds = []
         self.ge = []
         self.nets = []
         self.pipes = []
+
 
         for _, g in genomes:
             net = neat.nn.FeedForwardNetwork.create(g, config)
@@ -115,6 +118,9 @@ class Game:
                             else:
                                 next_pipe = pipe
                             break
+
+            if len(self.birds) == 0:
+                break
 
             # event loop
             for event in pygame.event.get():
@@ -154,7 +160,6 @@ class Game:
                             pipe1_y = SCREEN_HEIGHT / 2
                             pipe2_y = SCREEN_HEIGHT / 2
                         output = self.nets[x].activate([
-                            bird.pos.y,
                             abs(bird.pos.y - pipe1_y),
                             abs(bird.pos.y - pipe2_y)
                         ])
@@ -178,7 +183,7 @@ def run_neat(config_path):
     p.add_reporter(stats)
 
     game = Game()
-    winner = p.run(game.run,150)
+    winner = p.run(game.run,100)
 
 
 if __name__ == '__main__':
